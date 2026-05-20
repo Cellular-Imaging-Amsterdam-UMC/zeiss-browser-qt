@@ -37,6 +37,86 @@ def _reader_for(path_text: str):
     return CziFile(path_text)
 
 
+def is_czi_mosaic(path: Path) -> bool:
+    """Return True if the CZI file contains a mosaic (M) dimension."""
+    if CziFile is None:
+        return False
+    try:
+        reader = _reader_for(str(path))
+        return bool(reader.is_mosaic())
+    except Exception:
+        return False
+
+
+def read_czi_mosaic_plane(
+    path: Path,
+    *,
+    c: int = 0,
+    max_size: int = 2048,
+) -> np.ndarray:
+    """Read a stitched mosaic plane using the best embedded pyramid level.
+
+    Picks the coarsest pyramid level whose stitched output is still at least
+    *max_size* pixels on the longer side (so we never upsample a coarser level
+    when a finer one would fit).  Falls back to a computed scale estimate when
+    the CZI carries no pyramid metadata.
+    """
+    reader = _reader_for(str(path))
+    dims = _reader_dims(reader)
+    channel = max(0, min(int(c), dims.get("C", 1) - 1))
+    scale = _pyramid_scale_for_size(reader, max_size)
+    arr = reader.read_mosaic(C=channel, scale_factor=scale)
+    arr = np.asarray(arr)
+    # read_mosaic returns (1, H, W); squeeze the leading channel dim
+    while arr.ndim > 2 and arr.shape[0] == 1:
+        arr = arr[0]
+    return arr
+
+
+def _pyramid_scale_for_size(reader: Any, max_size: int) -> float:
+    """Return the scale_factor of the coarsest pyramid level whose output
+    is still >= *max_size* on its longer side.
+
+    With pyramid levels at 1/mf^i (i = 0 … lc-1) and full stitched size F:
+      output_i = F / mf^i
+    We want the largest i where output_i >= max_size, i.e.
+      mf^i  <=  F / max_size
+      i     <=  floor(log(F / max_size) / log(mf))
+    """
+    import math
+
+    root = reader.meta
+    mf_text = root.findtext(".//MinificationFactor")
+    lc_text = root.findtext(".//PyramidLayersCount")
+
+    # Determine the full stitched size from the scene bounding box
+    full_size = 0
+    try:
+        bboxes = reader.get_all_scene_bounding_boxes()
+        if bboxes:
+            bb = next(iter(bboxes.values()))
+            full_size = max(bb.w, bb.h)
+    except Exception:
+        pass
+
+    if not full_size:
+        # Fall back: estimate from single-tile dimensions and tile count
+        tile_xy = max(_reader_dims(reader).get("X", 512), _reader_dims(reader).get("Y", 512))
+        m_count = max(_reader_dims(reader).get("M", 1), 1)
+        side = max(math.ceil(math.sqrt(m_count)), 1)
+        full_size = tile_xy * side
+
+    if full_size <= max_size or not mf_text or not lc_text:
+        return 1.0
+
+    mf = max(int(mf_text), 2)
+    lc = max(int(lc_text), 1)
+    # Coarsest level index where output >= max_size
+    i = int(math.floor(math.log(full_size / max_size) / math.log(mf)))
+    i = min(max(i, 0), lc - 1)
+    return 1.0 / (mf ** i)
+
+
 def read_czi_plane(
     path: Path,
     *,
@@ -137,6 +217,37 @@ def _render_preview_array(
     size_s = max(_as_int(metadata.get("tiles") or metadata.get("size_s"), 1), 1)
     scene_index = _resolved_scene(selected_s, size_s)
     z_index = size_z // 2
+
+    # Use read_mosaic for mosaic (tiled) CZI files
+    reader = _reader_for(str(source_path))
+    if reader.is_mosaic():
+        if size_c == 1:
+            plane = read_czi_mosaic_plane(source_path, c=0, max_size=preview_height * 2)
+            plane8 = _normalize_plane(plane)
+            name = channel_names[0] if isinstance(channel_names, list) and channel_names else "Channel 1"
+            color = _channel_color(name, 0)
+            height, width = plane8.shape
+            rgb = np.dstack([
+                (plane8 * (color[0] / 255.0)).astype(np.uint8),
+                (plane8 * (color[1] / 255.0)).astype(np.uint8),
+                (plane8 * (color[2] / 255.0)).astype(np.uint8),
+            ])
+        else:
+            canvas = None
+            height = width = 0
+            for channel_index in range(size_c):
+                plane = read_czi_mosaic_plane(source_path, c=channel_index, max_size=preview_height * 2)
+                plane8 = _normalize_plane(plane).astype(np.float32)
+                if canvas is None:
+                    height, width = plane8.shape
+                    canvas = np.zeros((height, width, 3), dtype=np.float32)
+                name = channel_names[channel_index] if isinstance(channel_names, list) and channel_index < len(channel_names) else f"Channel {channel_index + 1}"
+                color = _channel_color(name, channel_index)
+                canvas[..., 0] += plane8 * (color[0] / 255.0)
+                canvas[..., 1] += plane8 * (color[1] / 255.0)
+                canvas[..., 2] += plane8 * (color[2] / 255.0)
+            rgb = np.clip(canvas, 0.0, 255.0).astype(np.uint8)
+        return _resize_preview(rgb, preview_height)
 
     first_image = read_czi_image(source_path, z=z_index, c=0, s=scene_index)
     if first_image.ndim == 3 and first_image.shape[-1] in {3, 4}:

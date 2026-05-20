@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zeiss-browser-qt"
-version = "0.4.0"
+version = "0.1.0"
 description = "Reusable PyQt6 browser dialog for Zeiss CZI image containers."
 readme = "README.md"
 requires-python = ">=3.10"

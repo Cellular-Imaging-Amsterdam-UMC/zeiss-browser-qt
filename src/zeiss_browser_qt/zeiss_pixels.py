@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from .czi_native import native_czi_available, read_czi_plane
+from .czi_native import is_czi_mosaic, native_czi_available, read_czi_mosaic_plane, read_czi_plane
 from .models import LeicaImageContext
 
 
@@ -84,8 +84,11 @@ def read_zeiss_plane(
     resolved_s = _resolve_s(context, s)
     source_file = context.metadata.get("source_file")
     if source_file and native_czi_available():
+        source_path = Path(str(source_file))
         try:
-            return read_czi_plane(Path(str(source_file)), z=z, c=c, t=t, s=resolved_s)
+            if is_czi_mosaic(source_path):
+                return read_czi_mosaic_plane(source_path, c=c, max_size=2048)
+            return read_czi_plane(source_path, z=z, c=c, t=t, s=resolved_s)
         except Exception:
             pass
     return _placeholder_plane(size_x, size_y, c, z, t, resolved_s)
