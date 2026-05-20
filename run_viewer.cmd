@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem Adapted from omero-browser-qt's run_viewer.cmd for leica-browser-qt.
+rem Adapted from omero-browser-qt's run_viewer.cmd for zeiss-browser-qt.
 
 set "REPO_DIR=%~dp0"
 set "PYTHONPATH=%REPO_DIR%src;%PYTHONPATH%"
@@ -8,9 +8,9 @@ set "DECONVOLVE_ENV=C:\Users\p000881\AppData\Local\miniconda3\envs\deconvolve"
 set "DECONVOLVE_PYTHON=%DECONVOLVE_ENV%\python.exe"
 
 if exist "%DECONVOLVE_PYTHON%" (
-    "%DECONVOLVE_PYTHON%" -m leica_browser_qt.leica_viewer %*
+    "%DECONVOLVE_PYTHON%" -m zeiss_browser_qt.zeiss_viewer %*
 ) else if defined CONDA_EXE (
-    "%CONDA_EXE%" run -n deconvolve python -m leica_browser_qt.leica_viewer %*
+    "%CONDA_EXE%" run -n deconvolve python -m zeiss_browser_qt.zeiss_viewer %*
 ) else (
-    conda run -n deconvolve python -m leica_browser_qt.leica_viewer %*
+    conda run -n deconvolve python -m zeiss_browser_qt.zeiss_viewer %*
 )

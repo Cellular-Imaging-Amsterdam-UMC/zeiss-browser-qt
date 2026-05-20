@@ -1,9 +1,9 @@
-"""Leica image-provider helpers for the Qt viewer.
+"""Zeiss image-provider helpers for the Qt viewer.
 
 The provider mirrors the lightweight plane-provider interface used by
-omero-browser-qt's viewer, but reads from LeicaImageContext objects. Until a
-full Leica pixel backend is bundled, it uses ConvertLeica-Docker preview output
-as a responsive 2D plane source and falls back to a generated placeholder.
+omero-browser-qt's viewer, but reads from ZeissImageContext objects. It prefers
+real native CZI planes when available, then native scene previews, and only
+falls back to a generated placeholder as a last resort.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from PyQt6.QtGui import QImage
 
-from .models import LeicaImageContext
+from .models import ZeissImageContext
 from .preview import preview_png_from_metadata
 
 _DEFAULT_COLORS = [
@@ -38,7 +38,7 @@ _COLOR_NAMES = {
 }
 
 
-def get_context_metadata(context: LeicaImageContext) -> dict[str, Any]:
+def get_context_metadata(context: ZeissImageContext) -> dict[str, Any]:
     size_c = context.size_c or len(context.channel_names) or 1
     lut_names = context.metadata.get("lutname")
     channels = []
@@ -47,6 +47,8 @@ def get_context_metadata(context: LeicaImageContext) -> dict[str, Any]:
         color = None
         if isinstance(lut_names, list) and idx < len(lut_names):
             color = _COLOR_NAMES.get(str(lut_names[idx]).strip().lower())
+        if color is None:
+            color = _color_from_channel_name(name)
         channels.append(
             {
                 "name": name,
@@ -78,15 +80,28 @@ def get_context_metadata(context: LeicaImageContext) -> dict[str, Any]:
     }
 
 
-class LeicaPreviewPlaneProvider:
-    """Plane provider for the Leica viewer.
+def _color_from_channel_name(name: str) -> tuple[int, int, int] | None:
+    low = str(name).strip().lower()
+    if any(token in low for token in ("dapi", "hoechst", "405")):
+        return 0, 128, 255
+    if any(token in low for token in ("488", "fitc", "gfp", "alexa fluor 488")):
+        return 0, 255, 0
+    if any(token in low for token in ("568", "594", "tritc", "cy3")):
+        return 255, 128, 0
+    if any(token in low for token in ("647", "660", "cy5", "alexa fluor 647")):
+        return 255, 0, 128
+    return None
+
+
+class ZeissPreviewPlaneProvider:
+    """Plane provider for the Zeiss viewer.
 
     It first asks the context handle for real planes. If that backend is not
-    implemented, it loads the existing ConvertLeica preview PNG and exposes its
+    implemented, it loads the existing preview PNG and exposes its
     RGB channels as display planes.
     """
 
-    def __init__(self, context: LeicaImageContext, max_cache_items: int = 64) -> None:
+    def __init__(self, context: ZeissImageContext, max_cache_items: int = 64) -> None:
         self.context = context
         self._meta = get_context_metadata(context)
         self._cache: OrderedDict[tuple[int, int, int, int], np.ndarray] = OrderedDict()
@@ -108,6 +123,9 @@ class LeicaPreviewPlaneProvider:
         if key in self._cache:
             self._cache.move_to_end(key)
             return self._cache[key]
+
+        if not self._has_real_pixels():
+            return self._remember(key, self._preview_channel(c))
 
         try:
             arr = self.context.open().read_plane(z=z, c=c, t=t, s=resolved_s)
@@ -153,6 +171,12 @@ class LeicaPreviewPlaneProvider:
         except Exception:
             self._preview_rgb = self._placeholder_preview()
 
+    def _has_real_pixels(self) -> bool:
+        pixel_backend = self.context.metadata.get("pixel_backend")
+        if isinstance(pixel_backend, str):
+            return pixel_backend.strip().lower() in {"native", "libczi", "real"}
+        return False
+
     def _placeholder_preview(self) -> np.ndarray:
         width = int(self._meta.get("size_x") or 512)
         height = int(self._meta.get("size_y") or 384)
@@ -171,3 +195,6 @@ class LeicaPreviewPlaneProvider:
         while len(self._cache) > self._max_cache_items:
             self._cache.popitem(last=False)
         return arr
+
+
+LeicaPreviewPlaneProvider = ZeissPreviewPlaneProvider

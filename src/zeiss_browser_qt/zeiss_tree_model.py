@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from .leica_gateway import LeicaTreeNode
-from .models import LeicaImageContext
+from .zeiss_gateway import ZeissTreeNode
+from .models import ZeissImageContext
 
 
-def iter_image_contexts(nodes: Iterable[LeicaTreeNode]) -> Iterable[LeicaImageContext]:
+def iter_image_contexts(nodes: Iterable[ZeissTreeNode]) -> Iterable[ZeissImageContext]:
     for node in nodes:
         if node.context is not None:
             yield node.context

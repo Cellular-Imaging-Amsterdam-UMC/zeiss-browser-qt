@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .models import LeicaImageContext
+from .models import ZeissImageContext
 
 SPATIAL_RESOLUTION_AXES = ("x", "y", "z")
 
@@ -53,7 +53,7 @@ def unit_to_micrometer_factor(unit: Any) -> float:
 
 
 def normalize_resolution_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    """Repair micrometer-resolution fields when Leica metadata is incomplete."""
+    """Repair micrometer-resolution fields when microscopy metadata is incomplete."""
 
     factor = unit_to_micrometer_factor(pick(metadata, "resunit", "xresunit", "unit"))
     for axis in SPATIAL_RESOLUTION_AXES:
@@ -101,10 +101,10 @@ def context_from_metadata(
     image_id: str | None,
     kind: str,
     metadata: dict[str, Any],
-) -> LeicaImageContext:
+) -> ZeissImageContext:
     metadata = normalize_resolution_metadata(metadata)
     dims = metadata.get("dimensions") if isinstance(metadata.get("dimensions"), dict) else {}
-    return LeicaImageContext(
+    return ZeissImageContext(
         name=name,
         container_path=container_path,
         internal_path=internal_path,
@@ -138,7 +138,7 @@ def metadata_rows(metadata: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def format_metadata_summary(metadata: dict[str, Any]) -> str:
-    """Return the compact metadata summary used by ConvertLeicaQT."""
+    """Return the compact metadata summary used by the Zeiss browser."""
 
     metadata = normalize_resolution_metadata(metadata)
     name = pick(metadata, "save_child_name", "name", "ElementName", default="(unnamed)")

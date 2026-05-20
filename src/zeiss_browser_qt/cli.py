@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 
-from .leica_browser_dialog import run_dialog_as_json
+from .zeiss_browser_dialog import run_dialog_as_json
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Open the Leica Qt browser and print selections as JSON.")
+    parser = argparse.ArgumentParser(description="Open the Zeiss Qt browser and print selections as JSON.")
     parser.add_argument("paths", nargs="*", help="Files or folders to browse.")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--single", action="store_true", help="Select one image. This is the default.")

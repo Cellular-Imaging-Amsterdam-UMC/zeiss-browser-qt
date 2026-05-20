@@ -1,14 +1,14 @@
 def test_public_api_imports():
-    from leica_browser_qt import (
-        LeicaBrowserDialog,
-        LeicaGateway,
-        LeicaImageContext,
-        LeicaImageHandle,
-        LeicaViewerWindow,
+    from zeiss_browser_qt import (
+        ZeissBrowserDialog,
+        ZeissGateway,
+        ZeissImageContext,
+        ZeissImageHandle,
+        ZeissViewerWindow,
     )
 
-    assert LeicaBrowserDialog is not None
-    assert LeicaGateway is not None
-    assert LeicaImageContext is not None
-    assert LeicaImageHandle is not None
-    assert LeicaViewerWindow is not None
+    assert ZeissBrowserDialog is not None
+    assert ZeissGateway is not None
+    assert ZeissImageContext is not None
+    assert ZeissImageHandle is not None
+    assert ZeissViewerWindow is not None

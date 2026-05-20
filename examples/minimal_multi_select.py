@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import QApplication
 
-from leica_browser_qt import LeicaBrowserDialog
+from zeiss_browser_qt import ZeissBrowserDialog
 
 
 app = QApplication([])
-contexts = LeicaBrowserDialog.select_image_contexts()
+contexts = ZeissBrowserDialog.select_image_contexts()
 for ctx in contexts:
     print(ctx.to_dict())

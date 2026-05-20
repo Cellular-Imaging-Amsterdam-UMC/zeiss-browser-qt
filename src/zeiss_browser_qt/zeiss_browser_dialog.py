@@ -34,9 +34,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .leica_gateway import LEICA_EXTENSIONS, LeicaGateway, LeicaTreeNode
+from .zeiss_gateway import CZI_EXTENSIONS, ZeissGateway, ZeissTreeNode
+from .icons import make_app_icon
 from .metadata import format_metadata_summary
-from .models import LeicaImageContext, LeicaImageHandle
+from .models import LeicaImageContext, LeicaImageHandle, ZeissImageContext, ZeissImageHandle
 from .preview import preview_png_from_metadata
 
 NODE_ROLE = int(Qt.ItemDataRole.UserRole)
@@ -44,6 +45,9 @@ CONTEXT_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 PLACEHOLDER_TEXT = "..."
 RECENT_ROOTS_KEY = "recent_roots"
 MAX_RECENT_ROOTS = 10
+SETTINGS_VENDOR = "NL-BioImaging"
+SETTINGS_APP = "zeiss-browser-qt"
+LEGACY_SETTINGS_APP = "leica-browser-qt"
 
 
 class PreviewWorker(QThread):
@@ -76,7 +80,7 @@ class PreviewWorker(QThread):
 class MetadataHydrateWorker(QThread):
     finishedHydrating = pyqtSignal(object, object)
 
-    def __init__(self, gateway: LeicaGateway, nodes: list[LeicaTreeNode]) -> None:
+    def __init__(self, gateway: ZeissGateway, nodes: list[ZeissTreeNode]) -> None:
         super().__init__()
         self.gateway = gateway
         self.nodes = nodes
@@ -95,22 +99,22 @@ class MetadataHydrateWorker(QThread):
             self.finishedHydrating.emit(None, traceback.format_exc())
 
 
-class LeicaBrowserDialog(QDialog):
-    """Reusable ConvertLeicaQT-style browser for selecting Leica image contexts."""
+class ZeissBrowserDialog(QDialog):
+    """Reusable browser dialog for selecting Zeiss image contexts."""
 
     def __init__(
         self,
         roots: Iterable[str | Path] | None = None,
         selection_mode: str = "single",
         parent: QWidget | None = None,
-        gateway: LeicaGateway | None = None,
+        gateway: ZeissGateway | None = None,
     ) -> None:
         super().__init__(parent)
         if selection_mode not in {"single", "multiple"}:
             raise ValueError("selection_mode must be 'single' or 'multiple'")
 
         root_list = list(roots) if roots is not None else None
-        self.gateway = gateway or LeicaGateway()
+        self.gateway = gateway or ZeissGateway()
         self.selection_mode = selection_mode
         self._preview_worker: PreviewWorker | None = None
         self._hydrate_worker: MetadataHydrateWorker | None = None
@@ -119,13 +123,14 @@ class LeicaBrowserDialog(QDialog):
         self._current_file: Path | None = None
         self._accepted_contexts: list[LeicaImageContext] | None = None
         self._browser_s_selection: dict[str, int | None] = {}
-        self._settings = QSettings("NL-BioImaging", "leica-browser-qt")
+        self._settings = QSettings(SETTINGS_VENDOR, SETTINGS_APP)
+        self._legacy_settings = QSettings(SETTINGS_VENDOR, LEGACY_SETTINGS_APP)
         self._current_root = self._initial_root(root_list)
         self._initial_files = self._initial_file_roots(root_list)
         self._recent_roots = self._load_recent_roots()
 
-        self.setWindowTitle("Browse Leica Images")
-        self.setWindowIcon(self._asset_icon("app-icon.png"))
+        self.setWindowTitle("Browse Zeiss CZI Images")
+        self.setWindowIcon(make_app_icon())
         self.resize(1180, 760)
         self._build_ui()
         self._apply_style()
@@ -166,7 +171,7 @@ class LeicaBrowserDialog(QDialog):
 
         top.addWidget(QLabel("Filter:"))
         self.filter_edit = QLineEdit()
-        self.filter_edit.setPlaceholderText("Filter Leica contents")
+        self.filter_edit.setPlaceholderText("Filter Zeiss contents")
         self.filter_edit.textChanged.connect(self.apply_content_filter)
         top.addWidget(self.filter_edit, 1)
 
@@ -181,7 +186,7 @@ class LeicaBrowserDialog(QDialog):
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        self.lbl_folders = QLabel("Folders and Leica files:")
+        self.lbl_folders = QLabel("Folders and CZI files:")
         left_layout.addWidget(self.lbl_folders)
         self.tree_fs = QTreeWidget()
         self.tree_fs.setHeaderHidden(True)
@@ -195,7 +200,7 @@ class LeicaBrowserDialog(QDialog):
         contents = QWidget()
         contents_layout = QVBoxLayout(contents)
         contents_layout.setContentsMargins(0, 0, 0, 0)
-        contents_layout.addWidget(QLabel("Contents of selected Leica file:"))
+        contents_layout.addWidget(QLabel("Contents of selected CZI file:"))
         self.tree_images = QTreeWidget()
         self.tree_images.setHeaderHidden(True)
         self.tree_images.setSelectionMode(
@@ -309,7 +314,7 @@ class LeicaBrowserDialog(QDialog):
         if roots:
             for root in roots:
                 path = Path(root).expanduser()
-                if path.is_file() and path.suffix.lower() in LEICA_EXTENSIONS:
+                if path.is_file() and path.suffix.lower() in CZI_EXTENSIONS:
                     files.append(path)
                 elif path.is_dir() and path.suffix.lower() == ".xlef":
                     files.append(path)
@@ -394,7 +399,7 @@ class LeicaBrowserDialog(QDialog):
                 item.setData(0, NODE_ROLE, entry)
                 item.addChild(QTreeWidgetItem([PLACEHOLDER_TEXT]))
                 parent_item.addChild(item)
-            elif entry.suffix.lower() in LEICA_EXTENSIONS:
+            elif entry.suffix.lower() in CZI_EXTENSIONS:
                 self._add_fs_file(parent_item, entry)
 
     def _add_fs_file(self, parent_item: QTreeWidgetItem, path: Path) -> None:
@@ -413,7 +418,7 @@ class LeicaBrowserDialog(QDialog):
             self._remember_root(self._current_root)
             self.lbl_root.setText(f"Root: {self._current_root}")
             self.refresh()
-        elif self._is_leica_container(path):
+        elif self._is_czi_container(path):
             self.load_file_images(path)
 
     def on_fs_selection_changed(self) -> None:
@@ -421,7 +426,7 @@ class LeicaBrowserDialog(QDialog):
         if not items:
             return
         path = items[0].data(0, NODE_ROLE)
-        if path and self._is_leica_container(Path(path)):
+        if path and self._is_czi_container(Path(path)):
             self.load_file_images(Path(path))
 
     # ------------------------------------------------------------------
@@ -447,7 +452,7 @@ class LeicaBrowserDialog(QDialog):
         self._auto_select_single_root_image(root_item)
         self._update_ok_state()
 
-    def _content_item_from_node(self, node: LeicaTreeNode, *, is_root: bool = False) -> QTreeWidgetItem:
+    def _content_item_from_node(self, node: ZeissTreeNode, *, is_root: bool = False) -> QTreeWidgetItem:
         text = node.name if not node.warning else f"{node.name}  [{node.warning}]"
         item = QTreeWidgetItem([text])
         item.setData(0, NODE_ROLE, node)
@@ -482,7 +487,7 @@ class LeicaBrowserDialog(QDialog):
 
     def on_content_item_expanded(self, item: QTreeWidgetItem) -> None:
         node = item.data(0, NODE_ROLE)
-        if not isinstance(node, LeicaTreeNode) or node.kind != "folder":
+        if not isinstance(node, ZeissTreeNode) or node.kind != "folder":
             return
         if item.childCount() != 1 or item.child(0).text(0) != PLACEHOLDER_TEXT:
             return
@@ -802,14 +807,12 @@ class LeicaBrowserDialog(QDialog):
 
     def icon_for_file(self, ext: str) -> QIcon:
         ext = ext.lower().lstrip(".")
-        mapping = {"lif": "file-lif.svg", "xlef": "file-xlef.svg", "lof": "file-lof.svg"}
+        mapping = {"czi": "file-czi.svg"}
         return self._asset_icon(mapping.get(ext, "image.svg"), QStyle.StandardPixmap.SP_FileIcon)
 
     @staticmethod
-    def _is_leica_container(path: Path) -> bool:
-        return (path.is_file() and path.suffix.lower() in LEICA_EXTENSIONS) or (
-            path.is_dir() and path.suffix.lower() == ".xlef"
-        )
+    def _is_czi_container(path: Path) -> bool:
+        return path.is_file() and path.suffix.lower() in CZI_EXTENSIONS
 
     def _remember_root(self, root: Path) -> None:
         if self._is_usable_root(root):
@@ -818,6 +821,8 @@ class LeicaBrowserDialog(QDialog):
 
     def _load_recent_roots(self) -> list[Path]:
         raw_roots = self._settings.value(RECENT_ROOTS_KEY, [])
+        if not raw_roots:
+            raw_roots = self._legacy_settings.value(RECENT_ROOTS_KEY, [])
         if isinstance(raw_roots, str):
             values = [raw_roots] if raw_roots else []
         else:
@@ -891,7 +896,7 @@ class LeicaBrowserDialog(QDialog):
             return False
 
         for entry in entries:
-            if entry.is_file() and entry.suffix.lower() in LEICA_EXTENSIONS:
+            if entry.is_file() and entry.suffix.lower() in CZI_EXTENSIONS:
                 try:
                     with entry.open("rb"):
                         pass
@@ -909,8 +914,8 @@ class LeicaBrowserDialog(QDialog):
             resolved = path
         markers = [
             resolved / "pyproject.toml",
-            resolved / "src" / "leica_browser_qt",
-            resolved / "plan_leica_browser_qt.md",
+            resolved / "src" / "zeiss_browser_qt",
+            resolved / "plan_zeiss_browser_qt.md",
         ]
         return all(marker.exists() for marker in markers)
 
@@ -927,7 +932,7 @@ class LeicaBrowserDialog(QDialog):
             if isinstance(item.data(0, CONTEXT_ROLE), LeicaImageContext)
         ]
         nodes = [item.data(0, NODE_ROLE) for item in items]
-        image_nodes = [node for node in nodes if isinstance(node, LeicaTreeNode)]
+        image_nodes = [node for node in nodes if isinstance(node, ZeissTreeNode)]
         if not image_nodes:
             return True
         if all(node.metadata_loaded for node in image_nodes):
@@ -1067,7 +1072,7 @@ def ensure_app() -> QApplication:
 
 def run_dialog_as_json(paths: list[str], *, multiple: bool) -> int:
     ensure_app()
-    dialog = LeicaBrowserDialog(roots=paths or None, selection_mode="multiple" if multiple else "single")
+    dialog = ZeissBrowserDialog(roots=paths or None, selection_mode="multiple" if multiple else "single")
     if dialog.exec() == QDialog.DialogCode.Accepted:
         contexts = dialog.selected_contexts()
         payload = [ctx.to_dict() for ctx in contexts] if multiple else (
@@ -1077,3 +1082,6 @@ def run_dialog_as_json(paths: list[str], *, multiple: bool) -> int:
         return 0
     print("[]" if multiple else "null")
     return 1
+
+
+LeicaBrowserDialog = ZeissBrowserDialog

@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""Leica LIF/XLEF/LOF viewer.
+"""Zeiss CZI viewer.
 
 This module is adapted from the public omero-browser-qt viewer design:
 zoomable microscopy canvas, channel toggles, contrast controls, Z/T controls,
 scale bar, status readout, and an embeddable QMainWindow. OMERO-specific
-login/ICE/pyramid code has been replaced by LeicaImageContext loading through
-LeicaBrowserDialog and LeicaPreviewPlaneProvider.
+login/ICE/pyramid code has been replaced by ZeissImageContext loading through
+ZeissBrowserDialog and ZeissPreviewPlaneProvider.
 
 Portions adapted from omero-browser-qt 0.2.5, Copyright (c) 2026 Ron Hoebe,
 MIT License.
@@ -51,10 +51,11 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
 )
 
-from .leica_browser_dialog import LeicaBrowserDialog
-from .leica_image_loader import LeicaPreviewPlaneProvider
+from .zeiss_browser_dialog import ZeissBrowserDialog
+from .icons import make_app_icon
+from .zeiss_image_loader import ZeissPreviewPlaneProvider
 from .metadata import metadata_rows
-from .models import LeicaImageContext
+from .models import ZeissImageContext
 from .scale_bar import compute_scale_bar
 
 _FALLBACK_PALETTE = [
@@ -241,21 +242,21 @@ class ZoomableImageView(QGraphicsView):
         painter.end()
 
 
-class LeicaViewerWindow(QMainWindow):
-    """OMERO-viewer-style window adapted for Leica image contexts."""
+class ZeissViewerWindow(QMainWindow):
+    """OMERO-viewer-style window adapted for Zeiss image contexts."""
 
     def __init__(
         self,
-        context: LeicaImageContext | None = None,
+        context: ZeissImageContext | None = None,
         roots: list[str] | None = None,
     ):
         super().__init__()
-        self.setWindowTitle("Leica Viewer")
-        self.setWindowIcon(_make_app_icon())
+        self.setWindowTitle("Zeiss Viewer")
+        self.setWindowIcon(make_app_icon())
         self.resize(1120, 760)
 
-        self._provider: LeicaPreviewPlaneProvider | None = None
-        self._context: LeicaImageContext | None = None
+        self._provider: ZeissPreviewPlaneProvider | None = None
+        self._context: ZeissImageContext | None = None
         self._roots = roots
         self._metadata: dict[str, Any] = {}
         self._channel_colors: list[tuple[int, int, int]] = []
@@ -294,9 +295,9 @@ class LeicaViewerWindow(QMainWindow):
 
         top_row = QHBoxLayout()
         title_box = QVBoxLayout()
-        title = QLabel("Leica Viewer")
+        title = QLabel("Zeiss Viewer")
         title.setObjectName("title")
-        self._path_label = QLabel("Open a Leica .lif, .xlef, or .lof image")
+        self._path_label = QLabel("Open a Zeiss .czi image")
         self._path_label.setObjectName("hint")
         self._path_label.setWordWrap(True)
         title_box.addWidget(title)
@@ -329,7 +330,7 @@ class LeicaViewerWindow(QMainWindow):
         actual_btn.clicked.connect(self._viewer_actual_size_later)
         fit_btn = QPushButton("Fit")
         fit_btn.clicked.connect(self._viewer_fit_later)
-        open_btn = QPushButton("Open Leica")
+        open_btn = QPushButton("Open CZI")
         open_btn.setObjectName("primary")
         open_btn.clicked.connect(self.open_from_browser)
         top_row.addWidget(actual_btn)
@@ -402,13 +403,13 @@ class LeicaViewerWindow(QMainWindow):
         self.setStatusBar(self._status)
 
     def open_from_browser(self) -> None:
-        context = LeicaBrowserDialog.select_image_context(roots=self._roots, parent=self)
+        context = ZeissBrowserDialog.select_image_context(roots=self._roots, parent=self)
         if context is not None:
             self.open_context(context)
 
-    def open_context(self, context: LeicaImageContext) -> None:
+    def open_context(self, context: ZeissImageContext) -> None:
         self._context = context
-        self._provider = LeicaPreviewPlaneProvider(context)
+        self._provider = ZeissPreviewPlaneProvider(context)
         self._metadata = self._provider.metadata
         self._channel_colors = _resolve_channel_colors(self._metadata.get("channels", []))
         self._path_label.setText(f"{context.container_path} / {context.internal_path}")
@@ -551,7 +552,7 @@ def ensure_app() -> QApplication:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Open the Leica LIF/XLEF/LOF viewer.")
+    parser = argparse.ArgumentParser(description="Open the Zeiss CZI viewer.")
     parser.add_argument("paths", nargs="*", help="Optional files or folders to browse first.")
     return parser
 
@@ -559,9 +560,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     app = ensure_app()
-    win = LeicaViewerWindow(roots=args.paths or None)
+    win = ZeissViewerWindow(roots=args.paths or None)
     win.show()
     return app.exec()
+
+
+LeicaViewerWindow = ZeissViewerWindow
 
 
 if __name__ == "__main__":  # pragma: no cover

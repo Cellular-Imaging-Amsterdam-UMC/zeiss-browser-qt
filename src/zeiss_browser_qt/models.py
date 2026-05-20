@@ -18,8 +18,8 @@ def _json_safe(value: Any) -> Any:
 
 
 @dataclass
-class LeicaImageContext:
-    """Stable description of one selected Leica image.
+class ZeissImageContext:
+    """Stable description of one selected Zeiss image.
 
     The context is intentionally serializable and backend-neutral. It contains
     enough file path and internal image identity to reopen the image later.
@@ -46,8 +46,8 @@ class LeicaImageContext:
     def __post_init__(self) -> None:
         self.container_path = Path(self.container_path)
 
-    def open(self) -> "LeicaImageHandle":
-        return LeicaImageHandle(self)
+    def open(self) -> "ZeissImageHandle":
+        return ZeissImageHandle(self)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -55,31 +55,35 @@ class LeicaImageContext:
         return _json_safe(data)
 
 
-class LeicaImageHandle:
+class ZeissImageHandle:
     """Thin image handle that delegates pixel work to the configured gateway."""
 
-    def __init__(self, context: LeicaImageContext) -> None:
+    def __init__(self, context: ZeissImageContext) -> None:
         self.context = context
 
     def read_thumbnail(self, max_size: int = 512):
-        from .leica_gateway import LeicaGateway
+        from .zeiss_gateway import ZeissGateway
 
-        return LeicaGateway().read_thumbnail(self.context, max_size=max_size)
+        return ZeissGateway().read_thumbnail(self.context, max_size=max_size)
 
     def read_plane(self, z: int = 0, c: int = 0, t: int = 0, s: int | None = None):
-        from .leica_gateway import LeicaGateway
+        from .zeiss_gateway import ZeissGateway
 
-        return LeicaGateway().read_plane(self.context, z=z, c=c, t=t, s=s)
+        return ZeissGateway().read_plane(self.context, z=z, c=c, t=t, s=s)
 
     def read_stack(self, c: int = 0, t: int = 0, s: int | None = None, progress=None):
-        from .leica_pixels import read_leica_stack
+        from .zeiss_pixels import read_zeiss_stack
 
-        return read_leica_stack(self.context, c=c, t=t, s=s, progress=progress)
+        return read_zeiss_stack(self.context, c=c, t=t, s=s, progress=progress)
 
     def read_array(self, s: int | None = None):
-        from .leica_gateway import LeicaGateway
+        from .zeiss_gateway import ZeissGateway
 
-        return LeicaGateway().read_array(self.context, s=s)
+        return ZeissGateway().read_array(self.context, s=s)
 
     def read_lazy(self):
-        raise NotImplementedError("Lazy Leica reading is not implemented in this first browser release.")
+        raise NotImplementedError("Lazy Zeiss reading is not implemented in this first browser release.")
+
+
+LeicaImageContext = ZeissImageContext
+LeicaImageHandle = ZeissImageHandle

@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "leica-browser-qt"
+name = "zeiss-browser-qt"
 version = "0.4.0"
-description = "Reusable PyQt6 browser dialog for Leica LIF, XLEF, and LOF image containers."
+description = "Reusable PyQt6 browser dialog for Zeiss CZI image containers."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
   { name = "NL-BioImaging contributors" },
 ]
-keywords = ["leica", "lif", "xlef", "lof", "pyqt6", "microscopy"]
+keywords = ["zeiss", "czi", "pyqt6", "microscopy"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
@@ -33,18 +33,18 @@ dependencies = [
 dev = ["pytest", "ruff", "build"]
 
 [project.scripts]
-leica_browser = "leica_browser_qt.cli:main"
-leica_viewer = "leica_browser_qt.leica_viewer:main"
+zeiss_browser = "zeiss_browser_qt.cli:main"
+zeiss_viewer = "zeiss_browser_qt.zeiss_viewer:main"
 
 [tool.hatch.build]
 include = [
-  "src/leica_browser_qt/**",
+  "src/zeiss_browser_qt/**",
   "README.md",
   "LICENSE",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/leica_browser_qt"]
+packages = ["src/zeiss_browser_qt"]
 
 [tool.ruff]
 line-length = 100
