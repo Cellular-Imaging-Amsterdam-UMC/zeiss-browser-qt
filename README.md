@@ -8,13 +8,17 @@ Zeiss-specific package surface and CZI metadata extraction.
 
 ## Install
 
+Install from [PyPI](https://pypi.org/project/zeiss-browser-qt/):
+
+```bash
+pip install zeiss-browser-qt
+```
+
+Or install in editable mode for development:
+
 ```bash
 pip install -e .
 ```
-
-The project is currently being developed and tested in:
-
-- `C:\Users\p000881\AppData\Local\miniconda3\envs\deconvolve`
 
 ## Current Status
 
@@ -112,6 +116,6 @@ code falls back to safe placeholder arrays.
 - Some CZI variants may still fall back to generated placeholders if the native
     reader cannot open them yet.
 - The current browser treats `S` as scene selection only. Mosaic/tile (`M`)
-    stitching is not implemented.
+    stitching is supported.
 - Some older tests and compatibility shims are still being retired as the Zeiss
     surface replaces the initial Leica-based port.
